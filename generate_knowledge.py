@@ -71,16 +71,35 @@ def profile_column_values(conn, view_name, date_filter):
     """Profile each column: cardinality, data type, sample values."""
     cur = conn.cursor()
 
-    # Get all columns from the view
+    # Get all columns from the view/table
+    # ALL_TAB_COLUMNS covers tables, views, and synonyms in Oracle
     schema, table = view_name.split(".") if "." in view_name else ("", view_name)
+    params = {"tname": table}
+    owner_clause = ""
+    if schema:
+        params["owner"] = schema
+        owner_clause = "AND OWNER = :owner"
+
     cur.execute(f"""
         SELECT COLUMN_NAME, DATA_TYPE, DATA_LENGTH
         FROM ALL_TAB_COLUMNS
-        WHERE TABLE_NAME = :tname
-        {"AND OWNER = :owner" if schema else ""}
+        WHERE TABLE_NAME = :tname {owner_clause}
         ORDER BY COLUMN_ID
-    """, {"tname": table, "owner": schema} if schema else {"tname": table})
+    """, params)
     columns = cur.fetchall()
+
+    # Fallback: if no columns found (can happen with views in some Oracle configs),
+    # try querying the view directly with ROWNUM = 0 to get column metadata
+    if not columns:
+        print(f"  WARNING: ALL_TAB_COLUMNS returned 0 columns for {view_name}.")
+        print(f"  Falling back to direct view query for column discovery...")
+        try:
+            cur.execute(f"SELECT * FROM {view_name} WHERE ROWNUM = 0")
+            columns = [(d[0], "VARCHAR2", 0) for d in cur.description]
+            print(f"  Found {len(columns)} columns via direct query.")
+        except Exception as e:
+            print(f"  ERROR: Could not discover columns: {e}")
+            return results
 
     results = OrderedDict()
     total = len(columns)
