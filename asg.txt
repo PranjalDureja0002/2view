@@ -1,0 +1,5 @@
+# Both views at once
+python scripts/generate_all_knowledge.py --host localhost --port 1521 --service XE --user pisview --password mypass
+
+# Or one view at a time
+python scripts/generate_knowledge.py --host localhost --port 1521 --service XE --user pisview --password mypass --view PISVIEW.VW_DIRECT_SPEND_ALL --label direct --output-dir ./knowledge_direct
